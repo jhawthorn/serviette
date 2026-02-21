@@ -1,8 +1,12 @@
 # frozen_string_literal: true
 
+require 'erb'
+
 module Serviette
   class Application
     class << self
+      attr_accessor :views
+
       def routes
         @routes ||= {}
       end
@@ -28,7 +32,13 @@ module Serviette
 
             instance = new
             instance.params = match.named_captures.freeze
-            return instance.instance_exec(*match.captures, &handler)
+            response = instance.instance_exec(*match.captures, &handler)
+            case response
+            when String
+              return [200, {}, [response]]
+            else
+              return response
+            end
           end
         end
 
@@ -57,6 +67,13 @@ module Serviette
     attr_accessor :params
 
     def initialize
+    end
+
+    def erb(template_name)
+      views = self.class.views
+      raise "views directory not configured. Add `self.views = File.join(__dir__, \"views\")` to #{self.class}" unless views
+      path = File.join(views, "#{template_name}.erb")
+      ERB.new(File.read(path)).result(binding)
     end
   end
 end
