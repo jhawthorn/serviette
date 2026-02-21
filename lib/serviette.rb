@@ -46,8 +46,8 @@ module Serviette
       def compile_route(path)
         return path if path.is_a?(Regexp)
 
-        regex = path.gsub(/(:(\w+)|\*)/) do
-          $2 ? "(?<#{$2}>[^/]+)" : "(.*?)"
+        regex = path.gsub(/:(\w+)/) do
+          "(?<#{$1}>[^/]+)"
         end
         /\A#{regex}\z/.freeze
       end
