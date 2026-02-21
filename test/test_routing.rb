@@ -87,6 +87,44 @@ class TestRouting < Minitest::Test
     assert_equal [200, {}, ["root"]], request("GET", "/")
   end
 
+  def test_same_path_different_verbs
+    @app.get("/users")  { [200, {}, ["got"]] }
+    @app.post("/users") { [201, {}, ["created"]] }
+
+    assert_equal [200, {}, ["got"]], request("GET", "/users")
+    assert_equal [201, {}, ["created"]], request("POST", "/users")
+  end
+
+  def test_static_after_param
+    @app.get("/users/:id/edit") { [200, {}, [params["id"]]] }
+    assert_equal [200, {}, ["42"]], request("GET", "/users/42/edit")
+
+    status, = request("GET", "/users/42")
+    assert_equal 404, status
+  end
+
+  def test_param_value_with_dots_and_hyphens
+    @app.get("/users/:name") { [200, {}, [params["name"]]] }
+    assert_equal [200, {}, ["john.doe"]], request("GET", "/users/john.doe")
+    assert_equal [200, {}, ["my-name"]], request("GET", "/users/my-name")
+  end
+
+  def test_param_with_literal_suffix
+    @app.get("/foo/:bar.html") { [200, {}, [params["bar"]]] }
+    assert_equal [200, {}, ["hello"]], request("GET", "/foo/hello.html")
+
+    status, = request("GET", "/foo/hello.txt")
+    assert_equal 404, status
+  end
+
+  def test_literal_dot_in_path_is_escaped
+    @app.get("/api/v1.0/status") { [200, {}, ["ok"]] }
+    assert_equal [200, {}, ["ok"]], request("GET", "/api/v1.0/status")
+
+    status, = request("GET", "/api/v1X0/status")
+    assert_equal 404, status
+  end
+
   def test_regex_route
     @app.get(%r{\A/items/(\d+)\z}) { |id| [200, {}, [id]] }
     assert_equal [200, {}, ["123"]], request("GET", "/items/123")

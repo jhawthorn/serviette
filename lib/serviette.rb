@@ -46,9 +46,10 @@ module Serviette
       def compile_route(path)
         return path if path.is_a?(Regexp)
 
-        regex = path.gsub(/:(\w+)/) do
-          "(?<#{$1}>[^/]+)"
-        end
+        parts = path.split(/:(\w+)/)
+        regex = parts.each_slice(2).map do |literal, name|
+          Regexp.escape(literal) + (name ? "(?<#{name}>[^/]+)" : "")
+        end.join
         /\A#{regex}\z/.freeze
       end
     end
