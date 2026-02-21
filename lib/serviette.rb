@@ -8,10 +8,12 @@ module Serviette
       attr_reader :templates
 
       def views=(path)
+        mod = Module.new
         @templates = {}
         Dir.glob(File.join(path, "**/*.erb")).each do |file|
           name = file.delete_prefix("#{path}/").delete_suffix(".erb")
-          @templates[name.to_sym] = File.read(file)
+          ERB.new(File.read(file)).def_method(mod, name, file)
+          @templates[name.to_sym] = mod.instance_method(name)
         end
       end
 
@@ -80,9 +82,9 @@ module Serviette
     def erb(template_name)
       templates = self.class.templates
       raise "views directory not configured. Add `self.views = File.join(__dir__, \"views\")` to #{self.class}" unless templates
-      content = templates[template_name.to_sym]
-      raise "unknown template :#{template_name}, available: #{templates.keys.inspect}" unless content
-      ERB.new(content).result(binding)
+      method = templates[template_name.to_sym]
+      raise "unknown template :#{template_name}, available: #{templates.keys.inspect}" unless method
+      method.bind_call(self)
     end
   end
 end
