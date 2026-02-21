@@ -5,7 +5,15 @@ require 'erb'
 module Serviette
   class Application
     class << self
-      attr_accessor :views
+      attr_reader :templates
+
+      def views=(path)
+        @templates = {}
+        Dir.glob(File.join(path, "**/*.erb")).each do |file|
+          name = file.delete_prefix("#{path}/").delete_suffix(".erb")
+          @templates[name.to_sym] = File.read(file)
+        end
+      end
 
       def routes
         @routes ||= {}
@@ -70,10 +78,11 @@ module Serviette
     end
 
     def erb(template_name)
-      views = self.class.views
-      raise "views directory not configured. Add `self.views = File.join(__dir__, \"views\")` to #{self.class}" unless views
-      path = File.join(views, "#{template_name}.erb")
-      ERB.new(File.read(path)).result(binding)
+      templates = self.class.templates
+      raise "views directory not configured. Add `self.views = File.join(__dir__, \"views\")` to #{self.class}" unless templates
+      content = templates[template_name.to_sym]
+      raise "unknown template :#{template_name}, available: #{templates.keys.inspect}" unless content
+      ERB.new(content).result(binding)
     end
   end
 end
