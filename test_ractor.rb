@@ -23,6 +23,7 @@ puts "Response from Ractor: #{r.value.inspect}"
 ractors = [
   ['/', 'GET'],
   ['/hello', 'GET'],
+  ['/hello/world', 'GET'],
   ['/fortune', 'GET'],
   ['/json', 'GET'],
   ['/api/status', 'GET']

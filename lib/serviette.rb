@@ -8,34 +8,52 @@ module Serviette
       end
 
       def route(verb, path, &block)
-        routes[[verb, path.freeze].freeze] = Ractor.shareable_proc(&block)
+        handler = Ractor.shareable_proc(&block)
+        pattern = compile_route(path)
+        (routes[verb] ||= []) << [pattern, handler].freeze
       end
 
-      def get     path, &block = route :GET,    path, &block
-      def post    path, &block = route :POST,   path, &block
-      def put     path, &block = route :PUT,    path, &block
-      def delete  path, &block = route :DELETE, path, &block
+      def get(path, &block)    = route(:GET,    path, &block)
+      def post(path, &block)   = route(:POST,   path, &block)
+      def put(path, &block)    = route(:PUT,    path, &block)
+      def delete(path, &block) = route(:DELETE,  path, &block)
 
       def call(env)
         request_method = env['REQUEST_METHOD'].to_sym
         path_info = env['PATH_INFO']
 
-        route_key = [request_method, path_info]
-        handler = routes[route_key]
+        if (verb_routes = routes[request_method])
+          verb_routes.each do |pattern, handler|
+            next unless (match = pattern.match(path_info))
 
-        if handler
-          instance = new
-          instance.instance_exec(&handler)
-        else
-          [404, {'Content-Type' => 'text/plain'}, ["Not Found\n"]]
+            instance = new
+            instance.params = match.named_captures.freeze
+            return instance.instance_exec(*match.captures, &handler)
+          end
         end
+
+        [404, { 'Content-Type' => 'text/plain' }, ["Not Found\n"]]
       end
 
       def freeze_routes!
+        routes.each_value(&:freeze)
         routes.freeze
         self
       end
+
+      private
+
+      def compile_route(path)
+        return path if path.is_a?(Regexp)
+
+        regex = path.gsub(/(:(\w+)|\*)/) do
+          $2 ? "(?<#{$2}>[^/]+)" : "(.*?)"
+        end
+        /\A#{regex}\z/.freeze
+      end
     end
+
+    attr_accessor :params
 
     def initialize
     end

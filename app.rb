@@ -15,6 +15,10 @@ class MyApp < Serviette::Application
     [200, {'Content-Type' => 'text/html'}, ["<h1>Hello from Serviette!</h1>\n"]]
   end
 
+  get '/hello/:name' do |name|
+    [200, {'Content-Type' => 'text/plain'}, ["Hello, #{name}!\n"]]
+  end
+
   get '/fortune' do
     fortune = FORTUNES.sample
     [200, {'Content-Type' => 'text/plain'}, [fortune]]
