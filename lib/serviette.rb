@@ -35,10 +35,10 @@ module Serviette
         [404, { 'Content-Type' => 'text/plain' }, ["Not Found\n"]]
       end
 
-      def freeze_routes!
+      def freeze
         routes.each_value(&:freeze)
         routes.freeze
-        self
+        super
       end
 
       private

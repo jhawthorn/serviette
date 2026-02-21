@@ -3,7 +3,6 @@ require 'serviette'
 require_relative 'app'
 
 # Freeze the app class and its routes for Ractor safety
-MyApp.freeze_routes!
 MyApp.freeze
 
 # Test in a Ractor
