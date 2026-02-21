@@ -78,4 +78,43 @@ class TestViews < Minitest::Test
     assert_match(/unknown template :nonexistent/, error.message)
     assert_match(/available:/, error.message)
   end
+
+  # Ractor safety
+
+  def test_erb_in_ractor
+    write_template("hello", "<h1>Hello, <%= @name %>!</h1>")
+    app = new_app
+    app.get("/hello/:name") do |name|
+      @name = name
+      erb :hello
+    end
+    app.freeze
+
+    result = Ractor.new(app) do |a|
+      a.call("REQUEST_METHOD" => "GET", "PATH_INFO" => "/hello/world")
+    end.value
+
+    assert_equal [200, {}, ["<h1>Hello, world!</h1>"]], result
+  end
+
+  def test_erb_parallel_ractors
+    write_template("greet", "Hi, <%= @name %>!")
+    app = new_app
+    app.get("/greet/:name") do |name|
+      @name = name
+      erb :greet
+    end
+    app.freeze
+
+    names = %w[alice bob carol dave]
+    results = names.map do |name|
+      Ractor.new(app, name) do |a, n|
+        a.call("REQUEST_METHOD" => "GET", "PATH_INFO" => "/greet/#{n}")
+      end
+    end.map(&:value)
+
+    names.each_with_index do |name, i|
+      assert_equal [200, {}, ["Hi, #{name}!"]], results[i]
+    end
+  end
 end

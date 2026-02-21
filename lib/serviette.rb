@@ -13,8 +13,9 @@ module Serviette
         Dir.glob(File.join(path, "**/*.erb")).each do |file|
           name = file.delete_prefix("#{path}/").delete_suffix(".erb")
           ERB.new(File.read(file)).def_method(mod, name, file)
-          @templates[name.to_sym] = mod.instance_method(name)
+          @templates[name.to_sym] = mod.instance_method(name).freeze
         end
+        Ractor.make_shareable(@templates)
       end
 
       def routes
