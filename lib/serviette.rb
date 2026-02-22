@@ -88,6 +88,30 @@ module Serviette
       @response = Rack::Response.new
     end
 
+    def status(value = nil)
+      response.status = value if value
+      response.status
+    end
+
+    def headers(hash = nil)
+      response.headers.merge!(hash) if hash
+      response.headers
+    end
+
+    def content_type(type)
+      response['content-type'] = type.to_s
+    end
+
+    def redirect(uri, status = 302)
+      response.status = status
+      response['location'] = uri.to_s
+    end
+
+    def not_found(body = nil)
+      response.status = 404
+      body
+    end
+
     def erb(template_name, layout: nil)
       templates = self.class.templates
       raise "views directory not configured. Add `self.views = File.join(__dir__, \"views\")` to #{self.class}" unless templates

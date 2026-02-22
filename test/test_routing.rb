@@ -154,4 +154,71 @@ class TestRouting < Minitest::Test
     @app.post("/echo") { [200, {}, [request.request_method]] }
     assert_equal [200, {}, ["POST"]], request("POST", "/echo")
   end
+
+  # Helper methods
+
+  def test_status_helper
+    @app.get("/") do
+      status 201
+      "created"
+    end
+    status, _, body = request("GET", "/")
+    assert_equal 201, status
+    assert_equal ["created"], body
+  end
+
+  def test_status_helper_getter
+    @app.get("/") do
+      status 201
+      [200, {}, [status.to_s]]
+    end
+    _, _, body = request("GET", "/")
+    assert_equal ["201"], body
+  end
+
+  def test_headers_helper
+    @app.get("/") do
+      headers "x-custom" => "yes", "x-other" => "no"
+      "ok"
+    end
+    _, headers, _ = request("GET", "/")
+    assert_equal "yes", headers["x-custom"]
+    assert_equal "no", headers["x-other"]
+  end
+
+  def test_content_type_helper
+    @app.get("/") do
+      content_type "application/json"
+      '{"ok":true}'
+    end
+    _, headers, _ = request("GET", "/")
+    assert_equal "application/json", headers["content-type"]
+  end
+
+  def test_redirect_helper
+    @app.get("/old") do
+      redirect "/new"
+    end
+    status, headers, _ = request("GET", "/old")
+    assert_equal 302, status
+    assert_equal "/new", headers["location"]
+  end
+
+  def test_redirect_helper_custom_status
+    @app.get("/old") do
+      redirect "/new", 301
+    end
+    status, headers, _ = request("GET", "/old")
+    assert_equal 301, status
+    assert_equal "/new", headers["location"]
+  end
+
+  def test_not_found_helper
+    @app.get("/gone") do
+      not_found "nope"
+    end
+    status, _, body = request("GET", "/gone")
+    assert_equal 404, status
+    assert_equal ["nope"], body
+  end
 end
