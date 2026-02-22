@@ -1,5 +1,8 @@
 # Serviette
 
+> [!WARNING]
+> Serviette is experimental and under active development. APIs may change without notice.
+
 A minimal, Ractor-safe web framework for Ruby 4.0.
 
 Inspired by Sinatra, Serviette provides a simple DSL for declaring route
