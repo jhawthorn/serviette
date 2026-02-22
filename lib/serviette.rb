@@ -58,7 +58,7 @@ module Serviette
           end
         end
 
-        [404, { 'Content-Type' => 'text/plain' }, ["Not Found\n"]]
+        [404, { 'content-type' => 'text/plain' }, ["Not Found\n"]]
       end
 
       def freeze
@@ -117,6 +117,7 @@ module Serviette
       raise "views directory not configured. Add `self.views = File.join(__dir__, \"views\")` to #{self.class}" unless templates
       method = templates[template_name.to_sym]
       raise "unknown template :#{template_name}, available: #{templates.keys.inspect}" unless method
+      content_type "text/html; charset=utf-8"
       output = method.bind_call(self)
 
       if layout.nil?
