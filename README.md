@@ -15,7 +15,7 @@ require 'serviette'
 
 class MyApp < Serviette::Application
   get '/' do
-    "Hello, World!"
+    redirect '/hello/world'
   end
 
   get '/hello/:name' do |name|
@@ -23,7 +23,8 @@ class MyApp < Serviette::Application
   end
 
   get '/users/:id' do
-    [200, { 'Content-Type' => 'application/json' }, [{ id: params["id"] }.to_json]]
+    content_type 'application/json'
+    { id: params["id"] }.to_json
   end
 end
 
@@ -32,11 +33,14 @@ run MyApp
 ```
 
 Route handlers can return a string (automatically wrapped as a 200 response)
-or a standard Rack `[status, headers, body]` tuple.
+or a standard Rack `[status, headers, body]` tuple. Helpers like `status`,
+`headers`, `content_type`, `redirect`, and `not_found` are available.
 
 ## Views
 
-ERB templates are precompiled at boot and made Ractor-shareable.
+ERB templates are precompiled at boot and made Ractor-shareable. A
+`layout.erb` is automatically used if present (override with `layout:` or
+disable with `layout: false`).
 
 ```ruby
 class MyApp < Serviette::Application
