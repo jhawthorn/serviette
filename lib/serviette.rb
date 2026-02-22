@@ -88,12 +88,24 @@ module Serviette
       @response = Rack::Response.new
     end
 
-    def erb(template_name)
+    def erb(template_name, layout: nil)
       templates = self.class.templates
       raise "views directory not configured. Add `self.views = File.join(__dir__, \"views\")` to #{self.class}" unless templates
       method = templates[template_name.to_sym]
       raise "unknown template :#{template_name}, available: #{templates.keys.inspect}" unless method
-      method.bind_call(self)
+      output = method.bind_call(self)
+
+      if layout.nil?
+        layout = :layout if templates.key?(:layout)
+      end
+
+      if layout
+        layout_method = templates[layout.to_sym]
+        raise "unknown layout template :#{layout}, available: #{templates.keys.inspect}" unless layout_method
+        output = layout_method.bind_call(self) { output }
+      end
+
+      output
     end
   end
 end

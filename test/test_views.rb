@@ -36,7 +36,7 @@ class TestViews < Minitest::Test
 
   def test_tuple_return_still_works
     new_app.get("/hello") { [201, { "X-Custom" => "yes" }, ["created"]] }
-    assert_equal [201, { "X-Custom" => "yes" }, ["created"]], request("GET", "/hello")
+    assert_equal [201, { "x-custom" => "yes" }, ["created"]], request("GET", "/hello")
   end
 
   # ERB rendering
@@ -79,6 +79,61 @@ class TestViews < Minitest::Test
     assert_match(/available:/, error.message)
   end
 
+  # Layouts
+
+  def test_layout_wraps_content
+    write_template("layout", "<html><%= yield %></html>")
+    write_template("index", "<p>Hello</p>")
+    new_app.get("/") { erb :index }
+    assert_equal [200, {}, ["<html><p>Hello</p></html>"]], request("GET", "/")
+  end
+
+  def test_default_layout_auto_detected
+    write_template("layout", "LAYOUT:<%= yield %>")
+    write_template("page", "CONTENT")
+    new_app.get("/") { erb :page }
+    assert_equal [200, {}, ["LAYOUT:CONTENT"]], request("GET", "/")
+  end
+
+  def test_no_layout_file_means_no_wrapping
+    write_template("index", "<p>Hello</p>")
+    new_app.get("/") { erb :index }
+    assert_equal [200, {}, ["<p>Hello</p>"]], request("GET", "/")
+  end
+
+  def test_explicit_layout
+    write_template("layout", "DEFAULT:<%= yield %>")
+    write_template("admin", "ADMIN:<%= yield %>")
+    write_template("page", "CONTENT")
+    new_app.get("/") { erb :page, layout: :admin }
+    assert_equal [200, {}, ["ADMIN:CONTENT"]], request("GET", "/")
+  end
+
+  def test_layout_false_skips_layout
+    write_template("layout", "LAYOUT:<%= yield %>")
+    write_template("page", "CONTENT")
+    new_app.get("/") { erb :page, layout: false }
+    assert_equal [200, {}, ["CONTENT"]], request("GET", "/")
+  end
+
+  def test_layout_shares_instance_variables
+    write_template("layout", "<title><%= @title %></title><%= yield %>")
+    write_template("page", "<p><%= @body %></p>")
+    new_app.get("/") do
+      @title = "My Page"
+      @body = "Hello"
+      erb :page
+    end
+    assert_equal [200, {}, ["<title>My Page</title><p>Hello</p>"]], request("GET", "/")
+  end
+
+  def test_explicit_missing_layout_raises
+    write_template("page", "CONTENT")
+    new_app.get("/") { erb :page, layout: :nonexistent }
+    error = assert_raises(RuntimeError) { request("GET", "/") }
+    assert_match(/unknown layout template :nonexistent/, error.message)
+  end
+
   # Ractor safety
 
   def test_erb_in_ractor
@@ -95,6 +150,23 @@ class TestViews < Minitest::Test
     end.value
 
     assert_equal [200, {}, ["<h1>Hello, world!</h1>"]], result
+  end
+
+  def test_layout_in_ractor
+    write_template("layout", "<html><%= yield %></html>")
+    write_template("hello", "<p>Hello, <%= @name %>!</p>")
+    app = new_app
+    app.get("/hello/:name") do |name|
+      @name = name
+      erb :hello
+    end
+    app.freeze
+
+    result = Ractor.new(app) do |a|
+      a.call("REQUEST_METHOD" => "GET", "PATH_INFO" => "/hello/world")
+    end.value
+
+    assert_equal [200, {}, ["<html><p>Hello, world!</p></html>"]], result
   end
 
   def test_erb_parallel_ractors
