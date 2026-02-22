@@ -2,6 +2,7 @@
 
 require 'erb'
 require 'rack'
+require_relative 'serviette/rack_ractor_support'
 
 module Serviette
   class Application
