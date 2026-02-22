@@ -132,4 +132,26 @@ class TestRouting < Minitest::Test
     status, = request("GET", "/items/abc")
     assert_equal 404, status
   end
+
+  def test_request_available_in_handler
+    @app.get("/info") { [200, {}, [request.path_info]] }
+    assert_equal [200, {}, ["/info"]], request("GET", "/info")
+  end
+
+  def test_response_set_status_and_headers
+    @app.get("/custom") do
+      response.status = 201
+      response["X-Custom"] = "yes"
+      "created"
+    end
+    status, headers, body = request("GET", "/custom")
+    assert_equal 201, status
+    assert_equal "yes", headers["X-Custom"]
+    assert_equal ["created"], body
+  end
+
+  def test_request_method
+    @app.post("/echo") { [200, {}, [request.request_method]] }
+    assert_equal [200, {}, ["POST"]], request("POST", "/echo")
+  end
 end

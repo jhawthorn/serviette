@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'erb'
+require 'rack'
 
 module Serviette
   class Application
@@ -41,15 +42,18 @@ module Serviette
           verb_routes.each do |pattern, handler|
             next unless (match = pattern.match(path_info))
 
-            instance = new
+            instance = new(env)
             instance.params = match.named_captures.freeze
-            response = instance.instance_exec(*match.captures, &handler)
-            case response
-            when String
-              return [200, {}, [response]]
-            else
-              return response
+            result = instance.instance_exec(*match.captures, &handler)
+            result = [result] if Integer === result || String === result
+            if Array === result && Integer === result.first
+              instance.response.status = result.shift
+              instance.response.body = result.pop
+              result.each { |h| instance.response.headers.merge!(h) }
+            elsif result.respond_to?(:each)
+              instance.response.body = result
             end
+            return instance.response.finish
           end
         end
 
@@ -76,8 +80,11 @@ module Serviette
     end
 
     attr_accessor :params
+    attr_reader :request, :response
 
-    def initialize
+    def initialize(env = {})
+      @request = Rack::Request.new(env)
+      @response = Rack::Response.new
     end
 
     def erb(template_name)
