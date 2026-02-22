@@ -40,7 +40,20 @@ Rack::Utils.default_query_parser.freeze
 
 # Rack::Request
 if Rack::Request.ip_filter.is_a?(Proc) && !Ractor.shareable?(Rack::Request.ip_filter)
-  Rack::Request.ip_filter = Ractor.shareable_proc(&Rack::Request.ip_filter)
+  # Rack's ip_filter lambda captures a local `trusted_proxies` regex that
+  # isn't shareable, so shareable_proc can't convert it.  Rebuild it with
+  # a shareable copy of the same pattern.
+  valid_ipv4_octet = /\.(25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])/
+  trusted_proxies = Ractor.make_shareable(Regexp.union(
+    /\A127#{valid_ipv4_octet}{3}\z/,
+    /\A::1\z/,
+    /\Af[cd][0-9a-f]{2}(?::[0-9a-f]{0,4}){0,7}\z/i,
+    /\A10#{valid_ipv4_octet}{3}\z/,
+    /\A172\.(1[6-9]|2[0-9]|3[01])#{valid_ipv4_octet}{2}\z/,
+    /\A192\.168#{valid_ipv4_octet}{2}\z/,
+    /\Alocalhost\z|\Aunix(\z|:)/i,
+  ))
+  Rack::Request.ip_filter = Ractor.shareable_proc { |ip| trusted_proxies.match?(ip) }
 end
 Rack::Request::Helpers::DEFAULT_PORTS.freeze
 Rack::Request::Helpers::FORM_DATA_MEDIA_TYPES.freeze
