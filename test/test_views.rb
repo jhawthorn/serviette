@@ -27,6 +27,10 @@ class TestViews < Minitest::Test
     File.write(File.join(@views_dir, "#{name}.erb"), content)
   end
 
+  def html_response(*body)
+    [200, {"content-type" => "text/html; charset=utf-8"}, body]
+  end
+
   # String return auto-wrapping
 
   def test_string_return
@@ -44,7 +48,7 @@ class TestViews < Minitest::Test
   def test_erb_renders_template
     write_template("index", "<h1>Hello</h1>")
     new_app.get("/") { erb :index }
-    assert_equal [200, {}, ["<h1>Hello</h1>"]], request("GET", "/")
+    assert_equal html_response("<h1>Hello</h1>"), request("GET", "/")
   end
 
   def test_erb_with_instance_variable
@@ -53,7 +57,7 @@ class TestViews < Minitest::Test
       @name = name
       erb :hello
     end
-    assert_equal [200, {}, ["<h1>Hello, world!</h1>"]], request("GET", "/hello/world")
+    assert_equal html_response("<h1>Hello, world!</h1>"), request("GET", "/hello/world")
   end
 
   def test_erb_with_multiple_instance_variables
@@ -63,7 +67,7 @@ class TestViews < Minitest::Test
       @role = "admin"
       erb :profile
     end
-    assert_equal [200, {}, ["alice - admin"]], request("GET", "/profile")
+    assert_equal html_response("alice - admin"), request("GET", "/profile")
   end
 
   def test_erb_raises_without_views_configured
@@ -85,20 +89,20 @@ class TestViews < Minitest::Test
     write_template("layout", "<html><%= yield %></html>")
     write_template("index", "<p>Hello</p>")
     new_app.get("/") { erb :index }
-    assert_equal [200, {}, ["<html><p>Hello</p></html>"]], request("GET", "/")
+    assert_equal html_response("<html><p>Hello</p></html>"), request("GET", "/")
   end
 
   def test_default_layout_auto_detected
     write_template("layout", "LAYOUT:<%= yield %>")
     write_template("page", "CONTENT")
     new_app.get("/") { erb :page }
-    assert_equal [200, {}, ["LAYOUT:CONTENT"]], request("GET", "/")
+    assert_equal html_response("LAYOUT:CONTENT"), request("GET", "/")
   end
 
   def test_no_layout_file_means_no_wrapping
     write_template("index", "<p>Hello</p>")
     new_app.get("/") { erb :index }
-    assert_equal [200, {}, ["<p>Hello</p>"]], request("GET", "/")
+    assert_equal html_response("<p>Hello</p>"), request("GET", "/")
   end
 
   def test_explicit_layout
@@ -106,14 +110,14 @@ class TestViews < Minitest::Test
     write_template("admin", "ADMIN:<%= yield %>")
     write_template("page", "CONTENT")
     new_app.get("/") { erb :page, layout: :admin }
-    assert_equal [200, {}, ["ADMIN:CONTENT"]], request("GET", "/")
+    assert_equal html_response("ADMIN:CONTENT"), request("GET", "/")
   end
 
   def test_layout_false_skips_layout
     write_template("layout", "LAYOUT:<%= yield %>")
     write_template("page", "CONTENT")
     new_app.get("/") { erb :page, layout: false }
-    assert_equal [200, {}, ["CONTENT"]], request("GET", "/")
+    assert_equal html_response("CONTENT"), request("GET", "/")
   end
 
   def test_layout_shares_instance_variables
@@ -124,7 +128,7 @@ class TestViews < Minitest::Test
       @body = "Hello"
       erb :page
     end
-    assert_equal [200, {}, ["<title>My Page</title><p>Hello</p>"]], request("GET", "/")
+    assert_equal html_response("<title>My Page</title><p>Hello</p>"), request("GET", "/")
   end
 
   def test_explicit_missing_layout_raises
@@ -149,7 +153,7 @@ class TestViews < Minitest::Test
       a.call("REQUEST_METHOD" => "GET", "PATH_INFO" => "/hello/world")
     end.value
 
-    assert_equal [200, {}, ["<h1>Hello, world!</h1>"]], result
+    assert_equal html_response("<h1>Hello, world!</h1>"), result
   end
 
   def test_layout_in_ractor
@@ -166,7 +170,7 @@ class TestViews < Minitest::Test
       a.call("REQUEST_METHOD" => "GET", "PATH_INFO" => "/hello/world")
     end.value
 
-    assert_equal [200, {}, ["<html><p>Hello, world!</p></html>"]], result
+    assert_equal html_response("<html><p>Hello, world!</p></html>"), result
   end
 
   def test_erb_parallel_ractors
@@ -186,7 +190,7 @@ class TestViews < Minitest::Test
     end.map(&:value)
 
     names.each_with_index do |name, i|
-      assert_equal [200, {}, ["Hi, #{name}!"]], results[i]
+      assert_equal html_response("Hi, #{name}!"), results[i]
     end
   end
 end
