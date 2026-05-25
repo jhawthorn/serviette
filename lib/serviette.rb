@@ -14,7 +14,7 @@ module Serviette
         @templates = {}
         Dir.glob(File.join(path, "**/*.erb")).each do |file|
           name = file.delete_prefix("#{path}/").delete_suffix(".erb")
-          ERB.new(File.read(file)).def_method(mod, name, file)
+          ERB.new(File.read(file)).def_method(mod, "#{name}(props = {})", file)
           @templates[name.to_sym] = mod.instance_method(name).freeze
         end
         Ractor.make_shareable(@templates)
@@ -112,16 +112,16 @@ module Serviette
       body
     end
 
-    def erb(template_name, layout: nil)
+    def erb(template_name, layout: nil, props: {})
       templates = self.class.templates
       raise "views directory not configured. Add `self.views = File.join(__dir__, \"views\")` to #{self.class}" unless templates
       method = templates[template_name.to_sym]
       raise "unknown template :#{template_name}, available: #{templates.keys.inspect}" unless method
       content_type "text/html; charset=utf-8"
-      output = method.bind_call(self)
+      output = method.bind_call(self, props)
 
       if layout.nil?
-        layout = :layout if templates.key?(:layout)
+        layout = :layout if templates.key?(:layout) && !template_name.to_s.start_with?("_")
       end
 
       if layout
