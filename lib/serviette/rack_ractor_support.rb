@@ -12,6 +12,22 @@ Rack::Files::ALLOWED_VERBS.freeze
 Rack::Files::ALLOW_HEADER.freeze
 Rack::Files::MULTIPART_BOUNDARY.freeze
 
+class Rack::Files
+  class GetDispatcher
+    def initialize(files) = @files = files
+    def call(env) = @files.get(env)
+  end
+
+  remove_method :initialize
+  def initialize(root, headers = {}, default_mime = 'text/plain')
+    @root = (::File.expand_path(root) if root)
+    @headers = headers
+    @default_mime = default_mime
+    @head = Rack::Head.new(GetDispatcher.new(self))
+    Ractor.make_shareable(self)
+  end
+end
+
 # Rack::Headers
 Rack::Headers::KNOWN_HEADERS.freeze
 
