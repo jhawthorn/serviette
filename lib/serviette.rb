@@ -5,6 +5,20 @@ require 'rack'
 require_relative 'serviette/rack_ractor_support'
 
 module Serviette
+  class Template
+    def initialize(name, method)
+      @method = method
+      @partial = File.basename(name).start_with?("_")
+      freeze
+    end
+
+    def partial? = @partial
+
+    def render(instance, props = {}, &block)
+      @method.bind_call(instance, props, &block)
+    end
+  end
+
   class Application
     class << self
       attr_reader :templates
@@ -15,7 +29,7 @@ module Serviette
         Dir.glob(File.join(path, "**/*.erb")).each do |file|
           name = file.delete_prefix("#{path}/").delete_suffix(".erb")
           ERB.new(File.read(file)).def_method(mod, "#{name}(props = {})", file)
-          @templates[name.to_sym] = mod.instance_method(name).freeze
+          @templates[name.to_sym] = Template.new(name, mod.instance_method(name))
         end
         Ractor.make_shareable(@templates)
       end
@@ -115,19 +129,19 @@ module Serviette
     def erb(template_name, layout: nil, props: {})
       templates = self.class.templates
       raise "views directory not configured. Add `self.views = File.join(__dir__, \"views\")` to #{self.class}" unless templates
-      method = templates[template_name.to_sym]
-      raise "unknown template :#{template_name}, available: #{templates.keys.inspect}" unless method
+      template = templates[template_name.to_sym]
+      raise "unknown template :#{template_name}, available: #{templates.keys.inspect}" unless template
       content_type "text/html; charset=utf-8"
-      output = method.bind_call(self, props)
+      output = template.render(self, props)
 
       if layout.nil?
-        layout = :layout if templates.key?(:layout) && !template_name.to_s.start_with?("_")
+        layout = :layout if templates.key?(:layout) && !template.partial?
       end
 
       if layout
-        layout_method = templates[layout.to_sym]
-        raise "unknown layout template :#{layout}, available: #{templates.keys.inspect}" unless layout_method
-        output = layout_method.bind_call(self) { output }
+        layout_template = templates[layout.to_sym]
+        raise "unknown layout template :#{layout}, available: #{templates.keys.inspect}" unless layout_template
+        output = layout_template.render(self) { output }
       end
 
       output
