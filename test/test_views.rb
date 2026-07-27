@@ -38,6 +38,11 @@ class TestViews < Minitest::Test
     assert_equal [200, {}, ["hello"]], request("GET", "/hello")
   end
 
+  def test_integer_return_sets_status_with_empty_body
+    new_app.get("/gone") { 404 }
+    assert_equal [404, {}, []], request("GET", "/gone")
+  end
+
   def test_tuple_return_still_works
     new_app.get("/hello") { [201, { "X-Custom" => "yes" }, ["created"]] }
     assert_equal [201, { "x-custom" => "yes" }, ["created"]], request("GET", "/hello")

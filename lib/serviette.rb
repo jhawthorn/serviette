@@ -60,8 +60,11 @@ module Serviette
             instance = new(env)
             instance.params = match.named_captures.freeze
             result = instance.instance_exec(*match.captures, &handler)
-            result = [result] if Integer === result || String === result
-            if Array === result && Integer === result.first
+            if Integer === result
+              instance.response.status = result
+            elsif String === result
+              instance.response.body = [result]
+            elsif Array === result && Integer === result.first
               instance.response.status = result.shift
               instance.response.body = result.pop
               result.each { |h| instance.response.headers.merge!(h) }
