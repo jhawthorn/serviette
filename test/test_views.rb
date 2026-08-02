@@ -48,6 +48,30 @@ class TestViews < Minitest::Test
     assert_equal [201, { "x-custom" => "yes" }, ["created"]], request("GET", "/hello")
   end
 
+  def test_status_and_headers_tuple
+    new_app.get("/gone") { [410, { "X-Custom" => "yes" }] }
+    assert_equal [410, { "x-custom" => "yes" }, []], request("GET", "/gone")
+  end
+
+  def test_status_and_body_tuple
+    new_app.get("/hello") { [201, ["created"]] }
+    assert_equal [201, {}, ["created"]], request("GET", "/hello")
+  end
+
+  def test_frozen_tuple_is_not_mutated
+    tuple = Ractor.make_shareable([201, { "X-Custom" => "yes" }, ["created"]])
+    new_app.get("/hello") { tuple }
+    expected = [201, { "x-custom" => "yes" }, ["created"]]
+    assert_equal expected, request("GET", "/hello")
+    assert_equal expected, request("GET", "/hello")
+    assert_equal 3, tuple.size
+  end
+
+  def test_oversized_tuple_raises
+    new_app.get("/hello") { [200, {}, ["a"], "extra"] }
+    assert_raises(ArgumentError) { request("GET", "/hello") }
+  end
+
   # ERB rendering
 
   def test_erb_renders_template

@@ -59,19 +59,31 @@ module Serviette
 
             instance = new(env)
             instance.params = match.named_captures.freeze
-            result = instance.instance_exec(*match.captures, &handler)
-            if Integer === result
-              instance.response.status = result
-            elsif String === result
-              instance.response.body = [result]
-            elsif Array === result && Integer === result.first
-              instance.response.status = result.shift
-              instance.response.body = result.pop
-              result.each { |h| instance.response.headers.merge!(h) }
-            elsif result.respond_to?(:each)
-              instance.response.body = result
+            body = instance.instance_exec(*match.captures, &handler)
+            response = instance.response
+
+            if Array === body && Integer === body.first
+              raise ArgumentError, "invalid response tuple: #{body.inspect}" if body.size > 3
+              status, headers, rest = body
+              response.status = status
+              if Hash === headers
+                response.headers.merge!(headers)
+                body = rest
+              else
+                body = headers
+              end
+            elsif Integer === body
+              response.status = body
+              body = nil
             end
-            return instance.response.finish
+
+            if String === body
+              response.body = [body]
+            elsif body.respond_to?(:each)
+              response.body = body
+            end
+
+            return response.finish
           end
         end
 
