@@ -32,9 +32,10 @@ end
 run MyApp
 ```
 
-Route handlers can return a string (automatically wrapped as a 200 response)
-or a standard Rack `[status, headers, body]` tuple. Helpers like `status`,
-`headers`, `content_type`, `redirect`, and `not_found` are available.
+Route handlers can return a string (automatically wrapped as a 200 response),
+an integer status, or a Rack `[status, headers, body]` tuple with either the
+headers or the body left out. Helpers like `status`, `headers`, `content_type`,
+`redirect`, and `not_found` are available.
 
 ## Views
 
