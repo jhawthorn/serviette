@@ -24,7 +24,9 @@ class TestViews < Minitest::Test
   end
 
   def write_template(name, content)
-    File.write(File.join(@views_dir, "#{name}.erb"), content)
+    path = File.join(@views_dir, "#{name}.erb")
+    FileUtils.mkdir_p(File.dirname(path))
+    File.write(path, content)
   end
 
   def html_response(*body)
@@ -165,6 +167,40 @@ class TestViews < Minitest::Test
     new_app.get("/") { erb :page, layout: :nonexistent }
     error = assert_raises(RuntimeError) { request("GET", "/") }
     assert_match(/unknown layout template :nonexistent/, error.message)
+  end
+
+  # Names that aren't valid method names
+
+  def test_template_in_subdirectory
+    write_template("users/show", "<h1><%= @name %></h1>")
+    new_app.get("/users/:name") do |name|
+      @name = name
+      erb :"users/show"
+    end
+    assert_equal html_response("<h1>alice</h1>"), request("GET", "/users/alice")
+  end
+
+  def test_partial_in_subdirectory
+    write_template("layout", "LAYOUT:<%= yield %>")
+    write_template("users/_row", "<li><%= props[:name] %></li>")
+    write_template("users/index", '<ul><%= erb :"users/_row", props: { name: "alice" } %></ul>')
+    new_app.get("/") { erb :"users/index" }
+    assert_equal html_response("LAYOUT:<ul><li>alice</li></ul>"), request("GET", "/")
+  end
+
+  def test_template_name_with_dot
+    write_template("show.html", "DOTTED")
+    new_app.get("/") { erb :"show.html" }
+    assert_equal html_response("DOTTED"), request("GET", "/")
+  end
+
+  def test_similar_names_do_not_collide
+    write_template("users/_row", "PARTIAL")
+    write_template("users_/row", "OTHER")
+    new_app.get("/a") { erb :"users/_row" }
+    @app.get("/b") { erb :"users_/row" }
+    assert_equal html_response("PARTIAL"), request("GET", "/a")
+    assert_equal html_response("OTHER"), request("GET", "/b")
   end
 
   # Ractor safety

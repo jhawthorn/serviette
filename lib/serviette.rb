@@ -28,8 +28,9 @@ module Serviette
         @templates = {}
         Dir.glob(File.join(path, "**/*.erb")).each do |file|
           name = file.delete_prefix("#{path}/").delete_suffix(".erb")
-          ERB.new(File.read(file)).def_method(mod, "#{name}(props = {})", file)
-          @templates[name.to_sym] = Template.new(name, mod.instance_method(name))
+          method_name = template_method_name(name)
+          ERB.new(File.read(file)).def_method(mod, "#{method_name}(props = {})", file)
+          @templates[name.to_sym] = Template.new(name, mod.instance_method(method_name))
         end
         Ractor.make_shareable(@templates)
       end
@@ -97,6 +98,25 @@ module Serviette
       end
 
       private
+
+      # An overly complex mapping, that gives each filename a unique and
+      # recognizable method name:
+      #   - "/" becomes "__"
+      #   - "." becomes "_2"
+      #   - anything else illegal becomes "_0" plus its hex bytes
+      #   - a literal "_" becomes "_1", but only where it could otherwise be
+      #     read as one of the escapes above
+      # So "users/_row" becomes "template_users___row".
+      def template_method_name(name)
+        "template_" + name.gsub(/[^a-zA-Z0-9_]|_(?![a-zA-Z]|\z)/) do |char|
+          case char
+          when "/" then "__"
+          when "." then "_2"
+          when "_" then "_1"
+          else char.bytes.map { |byte| "_0%02x" % byte }.join
+          end
+        end
+      end
 
       def compile_route(path)
         return path if path.is_a?(Regexp)
