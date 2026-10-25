@@ -10,7 +10,7 @@ class TestRouting < Minitest::Test
   end
 
   def app
-    Rack::Lint.new(@app)
+    Rack::Lint.new(Rack::Head.new(@app))
   end
 
   def test_get
@@ -45,6 +45,34 @@ class TestRouting < Minitest::Test
     get "/nope"
     assert_equal 404, last_response.status
     assert_equal "Not Found\n", last_response.body
+  end
+
+  def test_head_uses_the_get_route
+    @app.get("/hello") { "hello" }
+    head "/hello"
+    assert_equal 200, last_response.status
+    assert_equal "", last_response.body
+  end
+
+  def test_head_sees_its_own_method
+    @app.get("/hello") { request.head? ? "head" : "get" }
+    head "/hello"
+    assert_equal 200, last_response.status
+    get "/hello"
+    assert_equal "get", last_response.body
+  end
+
+  def test_head_route_wins_over_get
+    @app.get("/hello") { [200, { "x-from" => "get" }, "hello"] }
+    @app.route(:HEAD, "/hello") { [200, { "x-from" => "head" }, ""] }
+    head "/hello"
+    assert_equal "head", last_response.headers["x-from"]
+  end
+
+  def test_head_without_a_get_route
+    @app.post("/submit") { "created" }
+    head "/submit"
+    assert_equal 404, last_response.status
   end
 
   def test_wrong_verb

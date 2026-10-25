@@ -52,6 +52,15 @@ module Serviette
 
       def call(env)
         request_method = env['REQUEST_METHOD'].to_sym
+        response = dispatch(env, request_method)
+        # HEAD falls back to the GET routes, after any explicit HEAD route.
+        # Dropping the response body is left to Rack::Head.
+        response ||= dispatch(env, :GET) if request_method == :HEAD
+
+        response || [404, { 'content-type' => 'text/plain' }, ["Not Found\n"]]
+      end
+
+      def dispatch(env, request_method)
         path_info = env['PATH_INFO']
 
         if (verb_routes = routes[request_method])
@@ -88,8 +97,9 @@ module Serviette
           end
         end
 
-        [404, { 'content-type' => 'text/plain' }, ["Not Found\n"]]
+        nil
       end
+      private :dispatch
 
       def freeze
         routes.each_value(&:freeze)
