@@ -45,6 +45,7 @@ class TestRouting < Minitest::Test
     get "/nope"
     assert_equal 404, last_response.status
     assert_equal "Not Found\n", last_response.body
+    assert_equal "text/plain; charset=utf-8", last_response["content-type"]
   end
 
   def test_head_uses_the_get_route
@@ -278,5 +279,27 @@ class TestRouting < Minitest::Test
     get "/gone"
     assert_equal 404, last_response.status
     assert_equal "nope", last_response.body
+  end
+
+  def test_not_found_helper_sets_content_type
+    @app.get("/gone") { not_found "nope" }
+    get "/gone"
+    assert_equal "text/plain; charset=utf-8", last_response["content-type"]
+  end
+
+  def test_not_found_helper_keeps_explicit_content_type
+    @app.get("/gone") do
+      content_type "text/html"
+      not_found "<p>nope</p>"
+    end
+    get "/gone"
+    assert_equal "text/html", last_response["content-type"]
+  end
+
+  def test_not_found_helper_default_body
+    @app.get("/gone") { not_found }
+    get "/gone"
+    assert_equal "Not Found\n", last_response.body
+    assert_equal "text/plain; charset=utf-8", last_response["content-type"]
   end
 end

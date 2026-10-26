@@ -57,7 +57,7 @@ module Serviette
         # Dropping the response body is left to Rack::Head.
         response ||= dispatch(env, :GET) if request_method == :HEAD
 
-        response || [404, { 'content-type' => 'text/plain' }, ["Not Found\n"]]
+        response || [404, { 'content-type' => 'text/plain; charset=utf-8' }, ["Not Found\n"]]
       end
 
       def dispatch(env, request_method)
@@ -168,6 +168,8 @@ module Serviette
 
     def not_found(body = nil)
       response.status = 404
+      body = "Not Found\n" if body.nil?
+      response['content-type'] ||= 'text/plain; charset=utf-8' if String === body
       body
     end
 
