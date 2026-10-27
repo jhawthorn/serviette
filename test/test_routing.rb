@@ -302,4 +302,34 @@ class TestRouting < Minitest::Test
     assert_equal "Not Found\n", last_response.body
     assert_equal "text/plain; charset=utf-8", last_response["content-type"]
   end
+
+  def test_not_found_handler_renders_unmatched_paths
+    @app.not_found { "custom" }
+    get "/nope"
+    assert_equal 404, last_response.status
+    assert_equal "custom", last_response.body
+  end
+
+  def test_not_found_handler_gets_the_message
+    @app.not_found { |message| "gone: #{message.inspect}" }
+    @app.get("/a") { not_found("no a") }
+    @app.get("/b") { not_found }
+    get "/a"
+    assert_equal 404, last_response.status
+    assert_equal 'gone: "no a"', last_response.body
+    get "/b"
+    assert_equal "gone: nil", last_response.body
+  end
+
+  def test_not_found_handler_can_set_content_type
+    @app.not_found { content_type "text/html"; "<p>gone</p>" }
+    get "/nope"
+    assert_equal "text/html", last_response["content-type"]
+  end
+
+  def test_not_found_handler_applies_to_head
+    @app.not_found { "custom" }
+    head "/nope"
+    assert_equal 404, last_response.status
+  end
 end

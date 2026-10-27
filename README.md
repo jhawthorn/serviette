@@ -37,6 +37,13 @@ an integer status, or a Rack `[status, headers, body]` tuple with either the
 headers or the body left out. Helpers like `status`, `headers`, `content_type`,
 `redirect`, and `not_found` are available.
 
+To customize 404s, register a handler with `not_found { |message| ... }`. It
+renders unmatched paths and `not_found(message)` calls, and can use `erb`:
+
+```ruby
+not_found { |message| erb :not_found, props: { message: message } }
+```
+
 ## Views
 
 ERB templates are precompiled at boot and made Ractor-shareable. A

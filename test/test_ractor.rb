@@ -57,6 +57,18 @@ class TestRactor < Minitest::Test
     assert_equal 404, status
   end
 
+  def test_not_found_handler_in_ractor
+    app = Class.new(Serviette::Application)
+    app.not_found { "custom" }
+    app.freeze
+    status, _, body = Ractor.new(app) do |a|
+      a.call("REQUEST_METHOD" => "GET", "PATH_INFO" => "/nope")
+    end.value
+
+    assert_equal 404, status
+    assert_equal ["custom"], body
+  end
+
   def test_request_and_response_in_ractor
     app = Class.new(Serviette::Application)
     app.get("/info") do

@@ -45,6 +45,15 @@ module Serviette
         (routes[verb] ||= []) << [pattern, handler].freeze
       end
 
+      # Registers the block that renders every 404: unmatched paths and
+      # `not_found` calls in a route. It runs on an instance, like a route,
+      # and is given the message passed to `not_found` (nil if none).
+      def not_found(&block)
+        @not_found_handler = Ractor.shareable_proc(&block)
+      end
+
+      attr_reader :not_found_handler
+
       def get(path, &block)    = route(:GET,    path, &block)
       def post(path, &block)   = route(:POST,   path, &block)
       def put(path, &block)    = route(:PUT,    path, &block)
@@ -57,8 +66,16 @@ module Serviette
         # Dropping the response body is left to Rack::Head.
         response ||= dispatch(env, :GET) if request_method == :HEAD
 
-        response || [404, { 'content-type' => 'text/plain; charset=utf-8' }, ["Not Found\n"]]
+        response || unmatched(env)
       end
+
+      def unmatched(env)
+        instance = new(env)
+        body = instance.not_found
+        instance.response.body = [body] if String === body
+        instance.response.finish
+      end
+      private :unmatched
 
       def dispatch(env, request_method)
         path_info = env['PATH_INFO']
@@ -168,6 +185,8 @@ module Serviette
 
     def not_found(body = nil)
       response.status = 404
+      handler = self.class.not_found_handler
+      body = instance_exec(body, &handler) if handler
       body = "Not Found\n" if body.nil?
       response['content-type'] ||= 'text/plain; charset=utf-8' if String === body
       body
