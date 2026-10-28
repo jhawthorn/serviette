@@ -214,6 +214,55 @@ class TestRouting < Minitest::Test
     assert_equal "POST", last_response.body
   end
 
+  # Streaming bodies
+
+  def test_streaming_body
+    @app.get("/stream") do
+      proc do |stream|
+        stream.write "hello "
+        stream << "world"
+      end
+    end
+    get "/stream"
+    assert_equal 200, last_response.status
+    assert_equal "hello world", last_response.body
+    assert_nil last_response["content-length"]
+  end
+
+  def test_streaming_body_in_tuple
+    @app.get("/stream") do
+      [201, { "content-type" => "text/event-stream" }, proc { |stream| stream.write "data: hi\n\n" }]
+    end
+    get "/stream"
+    assert_equal 201, last_response.status
+    assert_equal "text/event-stream", last_response["content-type"]
+    assert_equal "data: hi\n\n", last_response.body
+  end
+
+  def test_streaming_body_in_tuple_without_headers
+    @app.get("/stream") { [202, proc { |stream| stream.write "accepted" }] }
+    get "/stream"
+    assert_equal 202, last_response.status
+    assert_equal "accepted", last_response.body
+  end
+
+  def test_streaming_body_sees_the_handler_instance
+    @app.get("/stream/:name") do
+      content_type "text/plain"
+      proc { |stream| stream.write "hello #{params["name"]}" }
+    end
+    get "/stream/world"
+    assert_equal "text/plain", last_response["content-type"]
+    assert_equal "hello world", last_response.body
+  end
+
+  def test_head_drops_a_streaming_body
+    @app.get("/stream") { proc { |stream| stream.write "hello" } }
+    head "/stream"
+    assert_equal 200, last_response.status
+    assert_equal "", last_response.body
+  end
+
   # Helper methods
 
   def test_status_helper
@@ -331,5 +380,23 @@ class TestRouting < Minitest::Test
     @app.not_found { "custom" }
     head "/nope"
     assert_equal 404, last_response.status
+  end
+
+  def test_not_found_handler_can_return_a_rack_body
+    @app.not_found { ["custom", " body"] }
+    get "/nope"
+    assert_equal 404, last_response.status
+    assert_equal "custom body", last_response.body
+  end
+
+  def test_not_found_handler_can_stream
+    @app.not_found { |message| proc { |stream| stream.write "gone: #{message.inspect}" } }
+    @app.get("/a") { not_found("no a") }
+    get "/nope"
+    assert_equal 404, last_response.status
+    assert_equal "gone: nil", last_response.body
+    get "/a"
+    assert_equal 404, last_response.status
+    assert_equal 'gone: "no a"', last_response.body
   end
 end

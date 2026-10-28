@@ -86,4 +86,23 @@ class TestRactor < Minitest::Test
     assert_equal "yes", headers["X-Custom"]
     assert_equal ["/info"], body
   end
+
+  def test_streaming_body_in_ractor
+    app = Class.new(Serviette::Application)
+    app.get("/stream/:name") do
+      proc { |stream| stream.write "hello #{params["name"]}" }
+    end
+    app.freeze
+
+    # The body is consumed where a server would consume it: inside the Ractor.
+    status, written = Ractor.new(app) do |a|
+      response = a.call("REQUEST_METHOD" => "GET", "PATH_INFO" => "/stream/ractor")
+      out = StringIO.new
+      response[2].call(out)
+      [response[0], out.string]
+    end.value
+
+    assert_equal 200, status
+    assert_equal "hello ractor", written
+  end
 end

@@ -71,11 +71,23 @@ module Serviette
 
       def unmatched(env)
         instance = new(env)
-        body = instance.not_found
-        instance.response.body = [body] if String === body
+        assign_body(instance.response, instance.not_found)
         instance.response.finish
       end
       private :unmatched
+
+      # Makes a handler's return value the response body: a String is
+      # wrapped, and anything that responds to `each` (an enumerable body) or
+      # `call` (a Rack 3 streaming body, given the stream to write to) is used
+      # as it is. Anything else leaves the body as the handler set it.
+      def assign_body(response, body)
+        if String === body
+          response.body = [body]
+        elsif body.respond_to?(:each) || body.respond_to?(:call)
+          response.body = body
+        end
+      end
+      private :assign_body
 
       def dispatch(env, request_method)
         path_info = env['PATH_INFO']
@@ -104,12 +116,7 @@ module Serviette
               body = nil
             end
 
-            if String === body
-              response.body = [body]
-            elsif body.respond_to?(:each)
-              response.body = body
-            end
-
+            assign_body(response, body)
             return response.finish
           end
         end
