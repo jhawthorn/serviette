@@ -82,6 +82,21 @@ class TestViews < Minitest::Test
     assert_equal html_response("<h1>Hello</h1>"), request("GET", "/")
   end
 
+  def test_erb_template_is_read_as_utf_8_regardless_of_locale
+    write_template("dot", "a · <%= @name %>")
+    old = Encoding.default_external
+    begin
+      Encoding.default_external = Encoding::US_ASCII
+      new_app.get("/") do
+        @name = "é"
+        erb :dot
+      end
+    ensure
+      Encoding.default_external = old
+    end
+    assert_equal html_response("a · é"), request("GET", "/")
+  end
+
   def test_erb_with_instance_variable
     write_template("hello", "<h1>Hello, <%= @name %>!</h1>")
     new_app.get("/hello/:name") do |name|

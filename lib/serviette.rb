@@ -29,7 +29,7 @@ module Serviette
         Dir.glob(File.join(path, "**/*.erb")).each do |file|
           name = file.delete_prefix("#{path}/").delete_suffix(".erb")
           method_name = template_method_name(name)
-          ERB.new(File.read(file)).def_method(mod, "#{method_name}(props = {})", file)
+          ERB.new(File.read(file, encoding: "UTF-8")).def_method(mod, "#{method_name}(props = {})", file)
           @templates[name.to_sym] = Template.new(name, mod.instance_method(method_name))
         end
         Ractor.make_shareable(@templates)
