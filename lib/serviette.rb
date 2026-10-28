@@ -204,7 +204,7 @@ module Serviette
       raise "views directory not configured. Add `self.views = File.join(__dir__, \"views\")` to #{self.class}" unless templates
       template = templates[template_name.to_sym]
       raise "unknown template :#{template_name}, available: #{templates.keys.inspect}" unless template
-      content_type "text/html; charset=utf-8"
+      response['content-type'] ||= "text/html; charset=utf-8"
       output = template.render(self, props)
 
       if layout.nil?

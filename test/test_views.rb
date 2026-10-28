@@ -203,6 +203,35 @@ class TestViews < Minitest::Test
     assert_equal html_response("LAYOUT:<ul><li>alice</li></ul>"), request("GET", "/")
   end
 
+  def test_partial_keeps_content_type_set_by_route
+    write_template("users/_row", "<li><%= props[:name] %></li>")
+    new_app.get("/") do
+      content_type "application/json"
+      %({"html":"#{erb :"users/_row", props: { name: "alice" }}"})
+    end
+    expected = [200, {"content-type" => "application/json"}, ['{"html":"<li>alice</li>"}']]
+    assert_equal expected, request("GET", "/")
+  end
+
+  def test_erb_keeps_content_type_set_before_render
+    write_template("feed", "<feed/>")
+    new_app.get("/") do
+      content_type "application/atom+xml"
+      erb :feed
+    end
+    assert_equal [200, {"content-type" => "application/atom+xml"}, ["<feed/>"]], request("GET", "/")
+  end
+
+  def test_content_type_after_erb_overrides_html
+    write_template("index", "<h1>Hello</h1>")
+    new_app.get("/") do
+      body = erb :index
+      content_type "text/plain"
+      body
+    end
+    assert_equal [200, {"content-type" => "text/plain"}, ["<h1>Hello</h1>"]], request("GET", "/")
+  end
+
   def test_template_name_with_dot
     write_template("show.html", "DOTTED")
     new_app.get("/") { erb :"show.html" }
