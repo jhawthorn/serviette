@@ -40,16 +40,28 @@ module Serviette
       end
 
       def route(verb, path, &block)
-        handler = Ractor.shareable_proc(&block)
         pattern = compile_route(path)
-        (routes[verb] ||= []) << [pattern, handler].freeze
+        method_name = :"#{verb} #{path}"
+        verb_routes = (routes[verb] ||= [])
+        if verb_routes.any? { |_, name| name == method_name }
+          raise ArgumentError, "route already defined: #{verb} #{path.inspect}"
+        end
+
+        # Every match has the same number of captures; an alternation with
+        # the empty pattern always matches, which counts them.
+        captures = /#{pattern}|/.match("").size - 1
+        count = define_handler(method_name, block, captures)
+        args = (1..count) unless count.zero?
+        verb_routes << [pattern, method_name, args].freeze
       end
 
       # Registers the block that renders every 404: unmatched paths and
       # `not_found` calls in a route. It runs on an instance, like a route,
       # and is given the message passed to `not_found` (nil if none).
       def not_found(&block)
-        @not_found_handler = Ractor.shareable_proc(&block)
+        method_name = :"not_found handler"
+        takes_message = define_handler(method_name, block, 1) > 0
+        @not_found_handler = [method_name, takes_message].freeze
       end
 
       attr_reader :not_found_handler
@@ -93,12 +105,17 @@ module Serviette
         path_info = env['PATH_INFO']
 
         if (verb_routes = routes[request_method])
-          verb_routes.each do |pattern, handler|
+          verb_routes.each do |pattern, method_name, args|
             next unless (match = pattern.match(path_info))
 
             instance = new(env)
             instance.params = match.named_captures.freeze
-            body = instance.instance_exec(*match.captures, &handler)
+            body =
+              if args
+                instance.__send__(method_name, *match.values_at(args))
+              else
+                instance.__send__(method_name)
+              end
             response = instance.response
 
             if Array === body && Integer === body.first
@@ -152,6 +169,21 @@ module Serviette
         end
       end
 
+      # Defines the block as a private method. A method checks its arguments
+      # strictly, so this returns how many of `given` arguments to pass it,
+      # as the block would take them: extra ones dropped, missing ones nil.
+      def define_handler(method_name, block, given)
+        remove_method(method_name) if private_method_defined?(method_name, false)
+        define_method(method_name, Ractor.shareable_proc(&block))
+        private method_name
+
+        kinds = block.parameters(lambda: true).map(&:first)
+        return given if kinds.include?(:rest)
+
+        required = kinds.count(:req)
+        given.clamp(required, required + kinds.count(:opt))
+      end
+
       def compile_route(path)
         return path if path.is_a?(Regexp)
 
@@ -192,8 +224,10 @@ module Serviette
 
     def not_found(body = nil)
       response.status = 404
-      handler = self.class.not_found_handler
-      body = instance_exec(body, &handler) if handler
+      if (handler = self.class.not_found_handler)
+        method_name, takes_message = handler
+        body = takes_message ? __send__(method_name, body) : __send__(method_name)
+      end
       body = "Not Found\n" if body.nil?
       response['content-type'] ||= 'text/plain; charset=utf-8' if String === body
       body

@@ -105,6 +105,52 @@ class TestRouting < Minitest::Test
     assert_equal "Hello, world!", last_response.body
   end
 
+  def test_block_args_need_not_match_captures
+    @app.get("/none/:a") { "none #{params['a']}" }
+    @app.get("/fewer/:a/:b") { |a| "fewer #{a}" }
+    @app.get("/more/:a") { |a, b| "more #{a} #{b.inspect}" }
+    @app.get("/optional/:a/:b/:c") { |a, b = nil| "optional #{a} #{b}" }
+    @app.get("/rest/:a/:b") { |*rest| "rest #{rest.join(',')}" }
+    @app.get(%r{\A/regexp/(\d+)\z}) { |n| "regexp #{n}" }
+
+    {
+      "/none/1" => "none 1",
+      "/fewer/1/2" => "fewer 1",
+      "/more/1" => "more 1 nil",
+      "/optional/1/2/3" => "optional 1 2",
+      "/rest/1/2" => "rest 1,2",
+      "/regexp/42" => "regexp 42",
+    }.each do |path, body|
+      get path
+      assert_equal body, last_response.body, path
+    end
+  end
+
+  def test_same_route_twice_raises
+    @app.get("/dup/:a") { |a| "first #{a}" }
+    error = assert_raises(ArgumentError) { @app.get("/dup/:a") { "second" } }
+    assert_equal 'route already defined: GET "/dup/:a"', error.message
+
+    get "/dup/1"
+    assert_equal "first 1", last_response.body
+  end
+
+  def test_same_path_with_different_verbs
+    @app.get("/same") { "get" }
+    @app.post("/same") { "post" }
+    get "/same"
+    assert_equal "get", last_response.body
+    post "/same"
+    assert_equal "post", last_response.body
+  end
+
+  def test_not_found_twice_with_different_block_args
+    @app.not_found { |message| "first #{message}" }
+    @app.not_found { "second" }
+    get "/missing"
+    assert_equal "second", last_response.body
+  end
+
   def test_static_does_not_match_subpath
     @app.get("/hello") { "hello" }
     get "/hello/world"
