@@ -14,6 +14,20 @@ class TestRactor < Minitest::Test
     app
   end
 
+  # Builds a full Rack env with Rack::MockRequest (which itself can only run
+  # on the main Ractor) and calls the app with it inside a Ractor.
+  def call_in_ractor(app, path, **opts)
+    env = Rack::MockRequest.env_for(path, opts)
+    input = env.delete("rack.input")&.read.to_s
+    env.delete("rack.errors")
+    Ractor.new(app, env, input) do |a, e, i|
+      e["rack.input"] = StringIO.new(i)
+      e["rack.errors"] = StringIO.new
+      s, h, b = a.call(e)
+      [s, h, b.to_enum(:each).to_a]
+    end.value
+  end
+
   def test_basic_request_in_ractor
     app = build_app
     result = Ractor.new(app) do |a|
@@ -104,5 +118,38 @@ class TestRactor < Minitest::Test
 
     assert_equal 200, status
     assert_equal "hello ractor", written
+  end
+
+  def test_rack_request_helpers_in_ractor
+    app = Class.new(Serviette::Application)
+    app.post("/form") do
+      status 201
+      content_type "text/plain"
+      [request.ip, request.scheme, request.params["a"], request.params["b"]].join(" ")
+    end
+    app.freeze
+
+    status, headers, body = call_in_ractor(app, "/form?a=1",
+      method: "POST", input: "b=2", "REMOTE_ADDR" => "127.0.0.1",
+      "HTTP_X_FORWARDED_FOR" => "1.2.3.4", "HTTP_X_FORWARDED_PROTO" => "https")
+
+    assert_equal 201, status
+    assert_equal "text/plain", headers["content-type"]
+    assert_equal ["1.2.3.4 https 1 2"], body
+  end
+
+  def test_rack_static_in_ractor
+    app = Rack::Builder.new do
+      use Rack::Static, urls: ["/test_ractor.rb"], root: __dir__
+      run Ractor.shareable_lambda { |_env| [404, {}, []] }
+    end
+    app.freeze_app
+    app = Ractor.make_shareable(app.to_app)
+
+    status, headers, body = call_in_ractor(app, "/test_ractor.rb")
+
+    assert_equal 200, status
+    assert_equal "text/x-script.ruby", headers["content-type"]
+    assert_equal File.read(__FILE__), body.join
   end
 end
