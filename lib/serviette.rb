@@ -83,8 +83,7 @@ module Serviette
 
       def unmatched(env)
         instance = new(env)
-        assign_body(instance.response, instance.not_found)
-        instance.response.finish
+        finish(instance, catch(:halt) { instance.not_found })
       end
       private :unmatched
 
@@ -101,6 +100,30 @@ module Serviette
       end
       private :assign_body
 
+      # The Rack response for what a handler returned, or halted with.
+      def finish(instance, body)
+        response = instance.response
+
+        if Array === body && Integer === body.first
+          raise ArgumentError, "invalid response tuple: #{body.inspect}" if body.size > 3
+          status, headers, rest = body
+          response.status = status
+          if Hash === headers
+            response.headers.merge!(headers)
+            body = rest
+          else
+            body = headers
+          end
+        elsif Integer === body
+          response.status = body
+          body = nil
+        end
+
+        assign_body(response, body)
+        response.finish
+      end
+      private :finish
+
       def dispatch(env, request_method)
         path_info = env['PATH_INFO']
 
@@ -110,31 +133,14 @@ module Serviette
 
             instance = new(env)
             instance.params = match.named_captures.freeze
-            body =
+            body = catch(:halt) do
               if args
                 instance.__send__(method_name, *match.values_at(args))
               else
                 instance.__send__(method_name)
               end
-            response = instance.response
-
-            if Array === body && Integer === body.first
-              raise ArgumentError, "invalid response tuple: #{body.inspect}" if body.size > 3
-              status, headers, rest = body
-              response.status = status
-              if Hash === headers
-                response.headers.merge!(headers)
-                body = rest
-              else
-                body = headers
-              end
-            elsif Integer === body
-              response.status = body
-              body = nil
             end
-
-            assign_body(response, body)
-            return response.finish
+            return finish(instance, body)
           end
         end
 
@@ -220,6 +226,13 @@ module Serviette
     def redirect(uri, status = 302)
       response.status = status
       response['location'] = uri.to_s
+    end
+
+    # Stops the handler and responds with what is given, as if the handler
+    # had returned it: a body, a status, or a status with headers or a body
+    # or both. With nothing, the response is what it has been set to.
+    def halt(*response)
+      throw :halt, response.size > 1 ? response : response.first
     end
 
     def not_found(body = nil)

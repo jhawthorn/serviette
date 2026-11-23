@@ -46,6 +46,15 @@ class TestRactor < Minitest::Test
     assert_equal [200, {}, ["world"]], result
   end
 
+  def test_halt_in_ractor
+    app = Class.new(Serviette::Application)
+    app.get("/secret") { halt 401, "no"; "yes" }
+    app.freeze
+
+    status, _, body = call_in_ractor(app, "/secret")
+    assert_equal [401, ["no"]], [status, body]
+  end
+
   def test_parallel_ractors
     app = build_app
     paths = ["/", "/hello/alice", "/hello/bob", "/users/1/posts/99"]

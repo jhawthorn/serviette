@@ -367,6 +367,60 @@ class TestRouting < Minitest::Test
     assert_equal "/new", last_response["location"]
   end
 
+  def test_halt_with_a_status
+    @app.get("/secret") { halt 401; "unreachable" }
+    get "/secret"
+    assert_equal 401, last_response.status
+    assert_equal "", last_response.body
+  end
+
+  def test_halt_with_a_body
+    @app.get("/early") { halt "early"; "late" }
+    get "/early"
+    assert_equal 200, last_response.status
+    assert_equal "early", last_response.body
+  end
+
+  def test_halt_with_a_status_and_body
+    @app.get("/gone") { halt 410, "gone\n"; "here" }
+    get "/gone"
+    assert_equal 410, last_response.status
+    assert_equal "gone\n", last_response.body
+  end
+
+  def test_halt_with_a_status_headers_and_body
+    @app.get("/auth") { halt 401, { "www-authenticate" => "Basic" }, "no"; "yes" }
+    get "/auth"
+    assert_equal 401, last_response.status
+    assert_equal "Basic", last_response["www-authenticate"]
+    assert_equal "no", last_response.body
+  end
+
+  def test_halt_from_a_helper
+    @app.define_method(:require_name) { |name| halt 403, "not #{name}" unless name == "ok" }
+    @app.get("/as/:name") { |name| require_name(name); "hello #{name}" }
+    get "/as/ok"
+    assert_equal "hello ok", last_response.body
+    get "/as/bad"
+    assert_equal 403, last_response.status
+    assert_equal "not bad", last_response.body
+  end
+
+  def test_halt_keeps_what_was_set_on_the_response
+    @app.get("/redirect") { redirect "/elsewhere"; halt; "unreachable" }
+    get "/redirect"
+    assert_equal 302, last_response.status
+    assert_equal "/elsewhere", last_response["location"]
+    assert_equal "", last_response.body
+  end
+
+  def test_halt_in_the_not_found_handler
+    @app.not_found { halt 410, "gone" }
+    get "/missing"
+    assert_equal 410, last_response.status
+    assert_equal "gone", last_response.body
+  end
+
   def test_not_found_helper
     @app.get("/gone") do
       not_found "nope"

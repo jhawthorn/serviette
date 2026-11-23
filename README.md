@@ -37,6 +37,15 @@ an integer status, or a Rack `[status, headers, body]` tuple with either the
 headers or the body left out. Helpers like `status`, `headers`, `content_type`,
 `redirect`, and `not_found` are available.
 
+`halt` stops a handler, or a helper it called, and responds with what it is
+given, as if the handler had returned it:
+
+```ruby
+def require_user!
+  halt 401, { "www-authenticate" => "Basic" }, "Log in\n" unless current_user
+end
+```
+
 To customize 404s, register a handler with `not_found { |message| ... }`. It
 renders unmatched paths and `not_found(message)` calls, and can use `erb`:
 
